@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
+use clap::{App, Arg, SubCommand};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use rustyline;
+use std::convert::TryFrom;
 use std::fmt;
 use std::str::FromStr;
 
@@ -41,7 +44,7 @@ impl FromStr for Hand {
                 suit = Hand::next_suit(suit);
                 continue;
             }
-            cards.push(Card::new(Rank::from(ch), suit))
+            cards.push(Card::new(Rank::try_from(ch)?, suit))
         }
         Ok(Hand { cards })
     }
@@ -106,17 +109,66 @@ impl Deck {
 }
 
 fn main() -> Result<()> {
-    let card = Card::from_str("AH")?;
-    println!("{:?}", card.suit());
-    println!("{}", card);
+    let matches = App::new("audrey")
+        .version("v0.2")
+        .author("John Jannotti <jannotti@gmail.com>")
+        .about("Bids like Audrey would")
+        .arg(
+            Arg::with_name("card")
+                .short("c")
+                .long("card")
+                .takes_value(true)
+                .value_name("CARD")
+                .help("Specify a card"),
+        )
+        .arg(
+            Arg::with_name("hand")
+                .short("h")
+                .long("hand")
+                .takes_value(true)
+                .value_name("HAND")
+                .help("Specify a hand in PBN notation"),
+        )
+        .subcommand(SubCommand::with_name("shell").about("interactive shell"))
+        .subcommand(SubCommand::with_name("deal").about("deal a new game"))
+        .subcommand(
+            SubCommand::with_name("bid")
+                .about("place a bid")
+                .arg(Arg::with_name("bid").required(true)),
+        )
+        .subcommand(SubCommand::with_name("play").about("play a card"))
+        .get_matches();
 
-    let hand = Hand::from_str("AKT6.52.T98.KJ52")?;
-    println!("{}", hand);
+    if let Some(s) = matches.value_of("card") {
+        let card = Card::from_str(s)?;
+        println!("{:?}", card.suit());
+        println!("{}", card);
+    }
 
-    let mut deck = Deck::new();
-    deck.shuffle();
-    let hands = deck.deal(4, 13)?;
-    println!("{} {}", hands[0], hands[1]);
+    if let Some(s) = matches.value_of("hand") {
+        let hand = Hand::from_str(s)?;
+        println!("{}", hand);
+    }
+
+    if let Some(_) = matches.subcommand_matches("shell") {
+        let mut rl = rustyline::Editor::<()>::new();
+        while let Ok(line) = rl.readline("aubrey> ") {
+            println!("Line: {:?}", line)
+        }
+    }
+
+    if let Some(_) = matches.subcommand_matches("deal") {
+        let mut deck = Deck::new();
+        deck.shuffle();
+        let hands = deck.deal(4, 13)?;
+        println!("{} {} {} {}", hands[0], hands[1], hands[2], hands[3]);
+    }
+
+    if let Some(matches) = matches.subcommand_matches("bid") {
+        let s = matches.value_of("bid").ok_or(anyhow!("no bid"))?;
+        println!("{:?}", s)
+    }
+
     Ok(())
 }
 
@@ -130,14 +182,15 @@ mod test {
     }
 
     #[test]
-    fn card_tricks() {
-        let two_hearts = Card::new(2, Suit::Hearts);
+    fn card_tricks() -> Result<()> {
+        let two_hearts = Card::new(Rank::try_from(2)?, Suit::Hearts);
         assert_eq!(two_hearts.rank(), Rank::Two);
         assert_eq!(two_hearts.suit(), Suit::Hearts);
-        assert_eq!(two_hearts, Card::new('2', Suit::Hearts));
-        assert_eq!(two_hearts, Card::new('2', 'h'));
-        assert_eq!(two_hearts, Card::new('2', 'H'));
+        assert_eq!(two_hearts, Card::new(Rank::try_from('2')?, Suit::Hearts));
+        assert_eq!(two_hearts, Card::try_new('2', 'h')?);
+        assert_eq!(two_hearts, Card::try_new('2', 'H')?);
         assert_eq!(two_hearts, Card::from_str("2h").expect("no parse"));
+        Ok(())
     }
 
     fn assert_hand_io(s: &str) {

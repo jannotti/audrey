@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::convert::TryFrom;
 use std::fmt;
 use std::str::FromStr;
 
@@ -30,20 +31,22 @@ impl FromStr for Suit {
         }
     }
 }
-impl From<char> for Suit {
-    fn from(val: char) -> Self {
-        Self::from_str(&val.to_string()).unwrap()
+impl TryFrom<char> for Suit {
+    type Error = anyhow::Error;
+    fn try_from(val: char) -> Result<Self> {
+        Self::from_str(&val.to_string())
     }
 }
-impl From<u8> for Suit {
-    fn from(val: u8) -> Self {
-        match val {
+impl TryFrom<u8> for Suit {
+    type Error = anyhow::Error;
+    fn try_from(val: u8) -> Result<Self> {
+        Ok(match val {
             0b00_000000 => Self::Clubs,
             0b01_000000 => Self::Diamonds,
             0b10_000000 => Self::Hearts,
             0b11_000000 => Self::Spades,
-            _ => panic!(val),
-        }
+            _ => return Err(anyhow!("no suit")),
+        })
     }
 }
 impl fmt::Display for Suit {
@@ -117,14 +120,16 @@ impl FromStr for Rank {
         }
     }
 }
-impl From<char> for Rank {
-    fn from(val: char) -> Self {
-        Self::from_str(&val.to_string()).unwrap()
+impl TryFrom<char> for Rank {
+    type Error = anyhow::Error;
+    fn try_from(val: char) -> Result<Self> {
+        Self::from_str(&val.to_string())
     }
 }
-impl From<u8> for Rank {
-    fn from(val: u8) -> Self {
-        match val {
+impl TryFrom<u8> for Rank {
+    type Error = anyhow::Error;
+    fn try_from(val: u8) -> Result<Self> {
+        Ok(match val {
             2 => Rank::Two,
             3 => Rank::Three,
             4 => Rank::Four,
@@ -138,8 +143,8 @@ impl From<u8> for Rank {
             12 => Rank::Queen,
             13 => Rank::King,
             14 => Rank::Ace,
-            _ => panic!(val),
-        }
+            _ => return Err(anyhow!("no rank")),
+        })
     }
 }
 impl fmt::Display for Rank {
@@ -163,14 +168,21 @@ impl fmt::Display for Rank {
 pub struct Card(u8);
 
 impl Card {
-    pub fn new(rank: impl Into<Rank>, suit: impl Into<Suit>) -> Card {
-        Self((suit.into() as u8) | (rank.into() as u8))
+    pub fn new(rank: Rank, suit: Suit) -> Card {
+        Self((suit as u8) | (rank as u8))
+    }
+    pub fn try_new<R, S>(rank: R, suit: S) -> Result<Card>
+    where
+        Rank: TryFrom<R, Error = anyhow::Error>,
+        Suit: TryFrom<S, Error = anyhow::Error>,
+    {
+        Ok(Self::new(Rank::try_from(rank)?, Suit::try_from(suit)?))
     }
     pub fn rank(&self) -> Rank {
-        Rank::from(self.0 & 0b1111)
+        Rank::try_from(self.0 & 0b1111).unwrap()
     }
     pub fn suit(&self) -> Suit {
-        Suit::from(self.0 & 0b11_00_0000)
+        Suit::try_from(self.0 & 0b11_00_0000).unwrap()
     }
 }
 impl FromStr for Card {

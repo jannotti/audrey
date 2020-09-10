@@ -8,4 +8,6 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+clap = "2"
 rand = "0.7"
+rustyline = "6.2"
